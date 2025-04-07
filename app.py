@@ -1,21 +1,20 @@
-from flask import Flask, render_template, redirect, request, session
+#Imports
+
+from flask import Flask, render_template, redirect, request
 from flask_scss import Scss
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-import uuid
 
-# App initialization
+#My App
 app = Flask(__name__)
 Scss(app)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
-app.secret_key = '69d798e30204315a0b34207bf1b96d12'  # Set your secret key
 
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
 db = SQLAlchemy(app)
 
-# Data model
+# Data class ~ Row of data
 class MyTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    visitor_id = db.Column(db.String(100), nullable=False)
     content = db.Column(db.String(100), nullable=False)
     complete = db.Column(db.Integer, default=0)
     created = db.Column(db.DateTime, default=datetime.utcnow)
@@ -26,61 +25,55 @@ class MyTask(db.Model):
 with app.app_context():
     db.create_all()
 
-# Home Page
-@app.route("/", methods=["POST", "GET"])
+# Routes to webpages
+# Home page
+@app.route("/",methods=["POST", "GET"])
 def index():
-    # Create a unique visitor_id if not already in session
-    if 'visitor_id' not in session:
-        session['visitor_id'] = str(uuid.uuid4())
-
-    visitor_id = session['visitor_id']
-
-    # Add Task
+    # Add a Task
     if request.method == "POST":
         current_task = request.form['content']
-        new_task = MyTask(content=current_task, visitor_id=visitor_id)
+        new_task = MyTask(content=current_task)
         try:
             db.session.add(new_task)
             db.session.commit()
             return redirect("/")
         except Exception as e:
-            return f"ERROR: {e}"
-
-    # Show Only Tasks for This Visitor
+            print(f"ERROR:{e}")
+            return f"ERROR:{e}"
+    # See all current tasks
     else:
-        tasks = MyTask.query.filter_by(visitor_id=visitor_id).order_by(MyTask.created).all()
+        tasks = MyTask.query.order_by(MyTask.created).all()
         return render_template("index.html", tasks=tasks)
+    
 
-# Delete Task
+# Delete an Item
 @app.route("/delete/<int:id>")
-def delete(id: int):
-    task = MyTask.query.get_or_404(id)
-    if task.visitor_id != session.get('visitor_id'):
-        return "Unauthorized", 403
-
+def delete(id:int):
+    delete_task = MyTask.query.get_or_404(id)
     try:
-        db.session.delete(task)
+        db.session.delete(delete_task)
         db.session.commit()
         return redirect("/")
     except Exception as e:
-        return f"ERROR: {e}"
+        return f"ERROR:{e}"
 
-# Edit Task
-@app.route("/edit/<int:id>", methods=["GET", "POST"])
-def edit(id: int):
+
+# Edit an Item
+@app.route("/edit/<int:id>", methods=['GET', 'POST'])
+def edit(id:int):
     task = MyTask.query.get_or_404(id)
-    if task.visitor_id != session.get('visitor_id'):
-        return "Unauthorized", 403
-
     if request.method == "POST":
         task.content = request.form['content']
         try:
             db.session.commit()
             return redirect("/")
         except Exception as e:
-            return f"ERROR: {e}"
+            return f"ERROR:{e}"
     else:
-        return render_template("edit.html", task=task)
+        return render_template('edit.html', task=task)
+
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
